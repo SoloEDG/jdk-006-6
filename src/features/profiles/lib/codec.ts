@@ -3,8 +3,14 @@ import type {
   CaseContent,
   CaseSnapshot,
   EvidenceNote,
+  HypothesisAttempt,
+  HypothesisCitation,
+  HypothesisQuestionId,
+  HypothesisState,
   SceneId,
+  VerdictStatus,
 } from "../../../shared/types";
+import { HYPOTHESIS_QUESTIONS } from "../../hypothesis/model/rules";
 type Obj = Record<string, unknown>;
 function object(value: unknown, label: string): Obj {
   if (!value || typeof value !== "object" || Array.isArray(value))
@@ -123,6 +129,117 @@ export function validateSnapshot(
     rate = number(rawResume.rate, "播放速度");
   if (position > duration(sceneId) || rate < 0.25 || rate > 4)
     throw new Error("播放进度无效");
+  const citation = (value: unknown): HypothesisCitation => {
+    const c = object(value, "引用依据");
+    const id = string(c.id, "引用编号");
+    if (!id) throw new Error("引用编号为空");
+    const kind = string(c.kind, "引用类型");
+    if (kind !== "clue" && kind !== "testimony")
+      throw new Error("引用类型无效");
+    const sceneId = scene(c.sceneId),
+      start = number(c.start, "引用起点"),
+      end = number(c.end, "引用终点"),
+      label = string(c.label, "引用文本");
+    if (end < start || end > duration(sceneId))
+      throw new Error("引用范围超出音频");
+    if (kind === "clue")
+      return {
+        id,
+        kind,
+        clueId: clue(c.clueId),
+        episodeId: null,
+        cueId: null,
+        sceneId,
+        speaker: null,
+        label,
+        start,
+        end,
+      };
+    const episodeId = string(c.episodeId, "引用音源");
+    const episode = content.episodes.find((item) => item.id === episodeId);
+    if (!episode) throw new Error("引用包含未知音源");
+    const cueId = string(c.cueId, "引用对白");
+    if (!episode.cues.some((item) => item.id === cueId))
+      throw new Error("引用包含未知对白");
+    return {
+      id,
+      kind,
+      clueId: null,
+      episodeId,
+      cueId,
+      sceneId,
+      speaker: c.speaker === null ? null : string(c.speaker, "引用说话人"),
+      label,
+      start,
+      end,
+    };
+  };
+  const hypotheses = ((): HypothesisState => {
+    if (root.hypotheses === undefined) return { attempts: [] };
+    const h = object(root.hypotheses, "假说试验");
+    const attempts = array(h.attempts, "试验记录").map((value) => {
+      const a = object(value, "试验记录");
+      const id = string(a.id, "试验编号");
+      if (!id) throw new Error("试验编号为空");
+      const rawChoices = object(a.choices, "假说结论"),
+        rawBasis = object(a.basis, "试验依据");
+      const choices = {} as Record<HypothesisQuestionId, string>,
+        basis = {} as Record<HypothesisQuestionId, HypothesisCitation[]>;
+      for (const question of HYPOTHESIS_QUESTIONS) {
+        const optionId = string(rawChoices[question.id], "假说选项");
+        if (!question.options.some((option) => option.id === optionId))
+          throw new Error("存档包含未知假说选项");
+        choices[question.id] = optionId;
+        basis[question.id] = array(rawBasis[question.id], "试验依据").map(
+          citation,
+        );
+      }
+      const statuses: VerdictStatus[] = [
+        "supported",
+        "contradicted",
+        "missing",
+      ];
+      const verdicts = array(a.verdicts, "试验结论").map((value) => {
+        const v = object(value, "试验结论");
+        const question = HYPOTHESIS_QUESTIONS.find(
+          (q) => q.id === string(v.question, "结论问题"),
+        );
+        if (!question) throw new Error("结论包含未知问题");
+        const optionId = string(v.optionId, "结论选项");
+        if (!question.options.some((option) => option.id === optionId))
+          throw new Error("结论包含未知选项");
+        const status = string(v.status, "结论状态") as VerdictStatus;
+        if (!statuses.includes(status)) throw new Error("结论状态无效");
+        return {
+          question: question.id,
+          optionId,
+          status,
+          problemCitationIds: array(v.problemCitationIds, "矛盾引用").map(
+            (item) => string(item, "矛盾引用"),
+          ),
+          missing: array(v.missing, "缺失依据").map((item) =>
+            string(item, "缺失依据"),
+          ),
+        };
+      });
+      if (
+        new Set(verdicts.map((verdict) => verdict.question)).size !==
+        HYPOTHESIS_QUESTIONS.length
+      )
+        throw new Error("试验结论不完整");
+      return {
+        id,
+        createdAt: number(a.createdAt, "试验时间"),
+        choices,
+        basis,
+        verdicts,
+        passed: boolean(a.passed, "试验结果"),
+      };
+    });
+    if (new Set(attempts.map((attempt) => attempt.id)).size !== attempts.length)
+      throw new Error("试验编号重复");
+    return { attempts };
+  })();
   return {
     version: 1,
     caseId: content.id,
@@ -130,5 +247,6 @@ export function validateSnapshot(
     evidence: { notes, clues, selectedId },
     heard,
     resume: { sceneId, position, rate },
+    hypotheses,
   };
 }

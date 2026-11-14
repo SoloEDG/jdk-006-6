@@ -123,7 +123,8 @@ export function ProfilesDialog({
                   <p>
                     {new Date(slot.updatedAt).toLocaleString("zh-CN")} ·{" "}
                     {slot.snapshot.evidence.clues.length} 条线索 ·{" "}
-                    {slot.snapshot.evidence.notes.length} 篇笔记
+                    {slot.snapshot.evidence.notes.length} 篇笔记 ·{" "}
+                    {slot.snapshot.hypotheses.attempts.length} 次假说
                   </p>
                 </div>
                 <div className="profile-actions">

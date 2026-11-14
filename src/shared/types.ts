@@ -77,6 +77,38 @@ export interface ResumePoint {
   position: number;
   rate: number;
 }
+export type HypothesisQuestionId = "cause" | "signal" | "motive";
+export type VerdictStatus = "supported" | "contradicted" | "missing";
+export interface HypothesisCitation {
+  id: string;
+  kind: "clue" | "testimony";
+  clueId: string | null;
+  episodeId: string | null;
+  cueId: string | null;
+  sceneId: SceneId;
+  speaker: string | null;
+  label: string;
+  start: number;
+  end: number;
+}
+export interface HypothesisVerdict {
+  question: HypothesisQuestionId;
+  optionId: string;
+  status: VerdictStatus;
+  problemCitationIds: string[];
+  missing: string[];
+}
+export interface HypothesisAttempt {
+  id: string;
+  createdAt: number;
+  choices: Record<HypothesisQuestionId, string>;
+  basis: Record<HypothesisQuestionId, HypothesisCitation[]>;
+  verdicts: HypothesisVerdict[];
+  passed: boolean;
+}
+export interface HypothesisState {
+  attempts: HypothesisAttempt[];
+}
 export interface CaseSnapshot {
   version: 1;
   caseId: string;
@@ -84,6 +116,7 @@ export interface CaseSnapshot {
   evidence: EvidenceState;
   heard: HeardHistory;
   resume: ResumePoint;
+  hypotheses: HypothesisState;
 }
 export interface SaveSlot {
   id: string;

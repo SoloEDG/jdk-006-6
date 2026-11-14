@@ -19,6 +19,7 @@ import {
   exportSlot,
   parseImported,
 } from "../src/features/profiles/index";
+import { createHypotheses } from "../src/features/hypothesis/index";
 import type { CaseContent, Investigation } from "../src/shared/types";
 const content: CaseContent = {
   id: "test",
@@ -71,6 +72,7 @@ function snapshot() {
     addNote(createEvidence(), anchor, "memo"),
     { "arrival-main": 7 },
     { sceneId: "arrival", position: 6, rate: 1 },
+    createHypotheses(),
   );
 }
 test("notes normalize anchors, edit, pin and delete without mutation", () => {

@@ -5,6 +5,8 @@ import type {
   SceneId,
   EvidenceNote,
   Cue,
+  HypothesisCitation,
+  HypothesisState,
 } from "../shared/types";
 import {
   CASE_CONTENT,
@@ -23,6 +25,13 @@ import {
   togglePinned,
 } from "../features/evidence";
 import {
+  createHypotheses,
+  appendAttempt,
+  buildAttempt,
+  replayTarget,
+  type HypothesisDraft,
+} from "../features/hypothesis";
+import {
   readSlots,
   createSnapshot,
   createSlot,
@@ -37,6 +46,7 @@ export function useCase() {
   const [story, setStory] = useState(createInvestigation),
     [evidence, setEvidence] = useState(createEvidence),
     [heard, setHeard] = useState<HeardHistory>({}),
+    [hypotheses, setHypotheses] = useState<HypothesisState>(createHypotheses),
     [slots, setSlots] = useState<SaveSlot[]>(boot.slots),
     [activeId, setActiveId] = useState<string | null>(null),
     [notice, setNotice] = useState(
@@ -116,13 +126,41 @@ export function useCase() {
     go(n.anchor.sceneId, n.anchor.start);
     setNotice(`已定位到「${n.title}」对应声音，点击播放回听。`);
   };
+  const submitHypothesis = (draft: HypothesisDraft) => {
+    const attempt = buildAttempt(draft);
+    setHypotheses((s) => appendAttempt(s, attempt));
+    setDirty(true);
+    setNotice(
+      attempt.passed
+        ? "假说通过检验——可以前往灯塔，还原那晚的真相。"
+        : "假说尚有缺口：查看逐项结论，返回调查补充依据。",
+    );
+    return attempt;
+  };
+  const replayCitation = (citation: HypothesisCitation) => {
+    const target = replayTarget(CASE_CONTENT, citation, evidence.clues, heard);
+    if (!target) {
+      setNotice("引用的证词已失效，无法重放。");
+      return false;
+    }
+    go(target.sceneId, target.position);
+    setNotice("已定位到引用片段，点击播放回听。");
+    return true;
+  };
   const save = (name: string) =>
     run(() => {
-      const snapshot = createSnapshot(CASE_CONTENT, story, evidence, heard, {
-        sceneId: story.sceneId,
-        position: audio.view.position,
-        rate: audio.view.rate,
-      });
+      const snapshot = createSnapshot(
+        CASE_CONTENT,
+        story,
+        evidence,
+        heard,
+        {
+          sceneId: story.sceneId,
+          position: audio.view.position,
+          rate: audio.view.rate,
+        },
+        hypotheses,
+      );
       const old = slots.find((s) => s.id === activeId);
       const slot =
         old && name === old.name
@@ -152,6 +190,7 @@ export function useCase() {
       setStory(snap.story);
       setEvidence(snap.evidence);
       setHeard(snap.heard);
+      setHypotheses(snap.hypotheses);
       setActiveId(id);
       setDirty(false);
       setNotice(`已载入「${slot.name}」，点击播放继续调查。`);
@@ -182,6 +221,7 @@ export function useCase() {
     story,
     evidence,
     heard,
+    hypotheses,
     slots,
     activeId,
     notice,
@@ -193,6 +233,8 @@ export function useCase() {
     note,
     collect,
     jump,
+    submitHypothesis,
+    replayCitation,
     save,
     load,
     importText,
@@ -220,6 +262,7 @@ export function useCase() {
       setStory(createInvestigation());
       setEvidence(createEvidence());
       setHeard({});
+      setHypotheses(createHypotheses());
       setActiveId(null);
       setDirty(false);
       if (story.sceneId === "arrival") audio.seek(0);

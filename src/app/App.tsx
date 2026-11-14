@@ -11,6 +11,7 @@ import {
   Save,
   Check,
   ChevronRight,
+  FlaskConical,
   Info,
 } from "lucide-react";
 import {
@@ -24,12 +25,14 @@ import { Player } from "../features/listening";
 import { TranscriptPanel } from "../features/transcript";
 import { EvidencePanel, canCollectSound } from "../features/evidence";
 import { ProfilesDialog } from "../features/profiles";
+import { HypothesisDialog } from "../features/hypothesis";
 import { currentCue } from "../features/transcript";
 import { useCase } from "./useCase";
 export function App() {
   const c = useCase(),
     [tab, setTab] = useState<"transcript" | "evidence">("transcript"),
     [profiles, setProfiles] = useState(false),
+    [hypothesis, setHypothesis] = useState(false),
     [about, setAbout] = useState(false);
   const scene = CASE_CONTENT.scenes.find((s) => s.id === c.story.sceneId)!,
     cue = currentCue(c.episode, c.audio.view.position),
@@ -188,6 +191,29 @@ export function App() {
               clues={c.evidence.clues}
               onChoose={c.choose}
             />
+            <section className="hypothesis-banner">
+              <div>
+                <span className="eyebrow">HYPOTHESIS TRIAL</span>
+                <h3>结案假说试验</h3>
+                <p>
+                  选出事故原因、信号来源与人物动机，引用已收集的线索和已听证词作为依据，检验推理是否解释了那些声音。
+                </p>
+                {c.hypotheses.attempts.length > 0 && (
+                  <small>
+                    已试验 {c.hypotheses.attempts.length} 次 · 最近一次
+                    {c.hypotheses.attempts[0].passed ? "已通过" : "未通过"}
+                  </small>
+                )}
+              </div>
+              <button
+                onClick={() => {
+                  c.audio.pause();
+                  setHypothesis(true);
+                }}
+              >
+                <FlaskConical size={14} /> 检验我的推理
+              </button>
+            </section>
             <div className="session-bar">
               <span>
                 <span className={`live-dot ${c.dirty ? "unsaved" : ""}`} />
@@ -306,6 +332,19 @@ export function App() {
           onClose={() => setProfiles(false)}
         />
       )}
+      {hypothesis && (
+        <HypothesisDialog
+          content={CASE_CONTENT}
+          evidence={c.evidence}
+          heard={c.heard}
+          attempts={c.hypotheses.attempts}
+          onSubmit={c.submitHypothesis}
+          onReplay={(citation) => {
+            if (c.replayCitation(citation)) setHypothesis(false);
+          }}
+          onClose={() => setHypothesis(false)}
+        />
+      )}
       {about && (
         <div className="modal-backdrop">
           <section className="guide-dialog">
@@ -322,6 +361,9 @@ export function App() {
             </p>
             <p>
               用「标记此刻」保留最近五秒的个人笔记，编辑观察，再从笔记跳回录音。自由笔记不会自动解锁证据。
+            </p>
+            <p>
+              推理有眉目时，打开「结案假说试验」：选出事故原因、信号来源与人物动机，引用线索和证词作为依据，逐项检验支持、矛盾与缺失。未通过可以返回调查补充，再试一次。
             </p>
             <p>
               从「调查存档」命名保存不同进度，也可导出或导入本地文件。新调查保留已有存档；切换存档会替换当前未保存进度，请先保存。
